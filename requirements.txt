@@ -1,0 +1,5 @@
+# Runtime dependencies. Add packages in the PR that first needs them
+# (e.g. google-cloud-storage in W1-4, psycopg in W1-6).
+requests>=2.32
+pandas>=2.2
+python-dotenv>=1.0

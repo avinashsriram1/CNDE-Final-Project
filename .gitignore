@@ -1,0 +1,41 @@
+# ---- Secrets (repo is PUBLIC) ----
+.env
+.env.*
+!.env.example
+*.pem
+*service-account*.json
+*credentials*.json
+
+# ---- Data: raw files live in GCS, never in git (fixtures are the exception) ----
+data/
+raw/
+*.parquet
+afdc_stations.json
+afdc_stations.csv
+afdc_registrations.csv
+eia_residential_prices.csv
+
+# ---- Course-proprietary material (syllabus policy) ----
+CNDE-FinalProject.pdf
+Module3_Exercises/
+
+# ---- Video: MP4 goes in the final zip only; commit the link ----
+Video/*.mp4
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.ipynb_checkpoints/
+
+# ---- Tools / OS ----
+.databricks/
+*.twbr
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
