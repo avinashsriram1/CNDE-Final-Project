@@ -1,0 +1,7 @@
+# AI Usage Log
+
+Final-project AI policy is pending confirmation with the instructor/TA (open item). Until then we log every material use here and disclose it in the README. We are responsible for verifying everything AI produced.
+
+| Date | Member (Part) | Tool | What it helped with | How we verified it |
+|---|---|---|---|---|
+| 2026-11-18 | _name_ (D) | Claude | Generated the K2 repo scaffold: folder structure, `.gitignore`, CI workflow, repo-hygiene tests, PR template, GitHub setup script, doc templates | Ran ruff and pytest locally; CI green on the scaffold PR; reviewed by Part A |
