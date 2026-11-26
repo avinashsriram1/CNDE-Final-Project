@@ -122,3 +122,51 @@ def test_lookup_tables_cover_51_states():
     tables = cleaning.lookup_tables()
     assert len(tables["state"]) == 51
     assert tables["state"]["division_code"].notna().all()
+
+
+def test_expected_date_only_kept_for_planned_and_unavailable():
+    log = cleaning.ExclusionLog()
+    records = [
+        station(id=1, status_code="E", expected_date="2026-12-01"),
+        station(id=2, status_code="P", expected_date="2026-12-01"),
+        station(id=3, status_code="T", expected_date="2026-12-01"),
+    ]
+    st = cleaning.clean_stations(records, log)["station"].set_index("station_id")
+    assert st.loc[1, "expected_date"] is None or pd.isna(st.loc[1, "expected_date"])
+    assert str(st.loc[2, "expected_date"]) == "2026-12-01"
+    assert str(st.loc[3, "expected_date"]) == "2026-12-01"
+
+
+def test_loaded_run_id_is_set_on_every_row():
+    log = cleaning.ExclusionLog()
+    st = cleaning.clean_stations([station(id=1)], log, run_id=202611242315041)["station"]
+    assert st["loaded_run_id"].tolist() == [202611242315041]
+
+
+def test_lineage_picks_newest_file_per_source_and_reads_manifest(tmp_path):
+    import json
+
+    from Scripts.common import lineage
+
+    old = tmp_path / "2026-11-24"
+    new = tmp_path / "2026-11-30"
+    for day, sources in [(old, ["afdc_stations", "eia_prices"]), (new, ["afdc_stations"])]:
+        for source in sources:
+            (day / source).mkdir(parents=True)
+            name = "stations.json.gz" if source == "afdc_stations" else "retail_sales.json.gz"
+            (day / source / name).write_text("x")
+    (old / "_manifest").mkdir()
+    uri = "gs://b/raw/2026-11-24/eia_prices/retail_sales.json.gz"
+    manifest = {
+        "run_id": "20261124T231504Z",
+        "results": [{"source": "eia_prices", "rows": 5, "files": [uri], "status": "success"}],
+        "files": [{"uri": uri, "sha256": "abc"}],
+    }
+    (old / "_manifest" / "20261124T231504Z.json").write_text(json.dumps(manifest))
+
+    assert lineage.latest_file(tmp_path, "afdc_stations")[1] == "2026-11-30"
+    path, day = lineage.latest_file(tmp_path, "eia_prices")
+    assert day == "2026-11-24"
+    row = lineage.ingestion_run_row(tmp_path, "eia_prices", day)
+    assert row["run_id"] == 202611242315042
+    assert row["file_hash"] == "abc" and row["row_count"] == 5

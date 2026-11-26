@@ -41,13 +41,18 @@ STATION_COLUMNS = [
     "city", "zip", "latitude", "longitude", "facility_type", "maximum_vehicle_class",
     "open_date", "expected_date", "date_last_confirmed", "updated_at", "unverified",
     "restricted_access", "ev_workplace_charging", "access_days_time", "ev_pricing",
+    "loaded_run_id",
 ]  # fmt: skip
 
 
-def clean_stations(records, log):
+def clean_stations(records, log, run_id=None):
     """Return station, station_port, station_connector, station_relation, ev_network,
-    federal_agency tables from the raw API records (list of dicts)."""
+    federal_agency tables from the raw API records (list of dicts).
+
+    run_id: the ingestion_run id these records came from (stored as loaded_run_id).
+    """
     df = pd.DataFrame(records).drop(columns=ref.PII_FIELDS, errors="ignore")
+    df["loaded_run_id"] = run_id
     df = df.rename(columns={"id": "station_id", "state": "state_code"})
 
     # Duplicates: keep the most recently confirmed record per station.
@@ -60,6 +65,12 @@ def clean_stations(records, log):
     keep = df["state_code"].isin(ref.STATE_CODES.values())
     log.add("station", "state_code not in 50 states + DC", (~keep).sum())
     df = df[keep].copy()
+
+    # expected_date is the opening date (P, planned) or reopening date (T, temporarily
+    # unavailable). For available stations (E) it has no meaning: clear it and count it.
+    stray = df["expected_date"].notna() & ~df["status_code"].isin(["P", "T"])
+    log.add("station", "expected_date cleared for available (E) station", stray.sum())
+    df.loc[stray, "expected_date"] = None
 
     df["zip"] = df["zip"].map(pad_zip)
     for col in ["open_date", "expected_date", "date_last_confirmed"]:
@@ -97,6 +108,7 @@ def clean_stations(records, log):
     station = df[STATION_COLUMNS].reset_index(drop=True)
     station["network_id"] = station["network_id"].astype("Int64")
     station["federal_agency_id"] = station["federal_agency_id"].astype("Int64")
+    station["loaded_run_id"] = station["loaded_run_id"].astype("Int64")
 
     # Ports: one row per station and level, only when the count is above 0.
     # An empty count in the source means the station has no ports of that level.
@@ -147,7 +159,7 @@ def clean_stations(records, log):
 
 
 # ---------- Registrations ----------
-def clean_registrations(wide, log):
+def clean_registrations(wide, log, run_id=None):
     """Wide AFDC table (one column per fuel) -> long vehicle_registration table.
 
     Validation: the 51 state rows must add up exactly to the 'United States' row.
@@ -174,9 +186,10 @@ def clean_registrations(wide, log):
 
     long = states.melt(id_vars=["state_code", "year"], value_vars=fuel_cols, var_name="fuel")
     long["fuel_type_id"] = long["fuel"].map(lambda f: ref.FUEL_TYPES[f][0])
+    long["loaded_run_id"] = pd.array([run_id] * len(long), dtype="Int64")
     return (
         long.rename(columns={"value": "vehicle_count"})[
-            ["state_code", "year", "fuel_type_id", "vehicle_count"]
+            ["state_code", "year", "fuel_type_id", "vehicle_count", "loaded_run_id"]
         ]
         .astype({"year": int, "fuel_type_id": int, "vehicle_count": int})
         .sort_values(["state_code", "year", "fuel_type_id"])
@@ -185,7 +198,7 @@ def clean_registrations(wide, log):
 
 
 # ---------- Prices ----------
-def clean_prices(raw, log):
+def clean_prices(raw, log, run_id=None):
     """EIA retail-sales rows -> electricity_price (51 states, one row per state, month, sector)."""
     df = raw.rename(
         columns={"stateid": "state_code", "sectorid": "sector_id", "price": "price_cents_kwh"}
@@ -203,7 +216,8 @@ def clean_prices(raw, log):
     df = df[~bad]
 
     df["period_month"] = pd.to_datetime(df["period"], format="%Y-%m").dt.date
-    out = df[["state_code", "period_month", "sector_id", "price_cents_kwh"]]
+    df["loaded_run_id"] = pd.array([run_id] * len(df), dtype="Int64")
+    out = df[["state_code", "period_month", "sector_id", "price_cents_kwh", "loaded_run_id"]]
     before = len(out)
     out = out.drop_duplicates(["state_code", "period_month", "sector_id"])
     log.add("electricity_price", "duplicate state + month + sector", before - len(out))
@@ -277,5 +291,12 @@ def check_keys(tables):
             extra = set(tables[table][col].dropna()) - set(tables[parent][pcol])
             if extra:
                 problems.append(f"{table}.{col} has unknown values: {sorted(extra)}")
+    if "ingestion_run" in tables:
+        runs = set(tables["ingestion_run"]["run_id"])
+        for table in ["station", "vehicle_registration", "electricity_price"]:
+            if table in tables:
+                ids = set(tables[table]["loaded_run_id"].dropna())
+                if not ids <= runs:
+                    problems.append(f"{table}.loaded_run_id not in ingestion_run")
     if problems:
         raise ValueError("Key checks failed:\n" + "\n".join(problems))

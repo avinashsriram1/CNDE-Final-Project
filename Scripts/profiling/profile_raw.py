@@ -4,7 +4,7 @@ For each source: row and column counts, a schema table (type, % empty, distinct 
 example), a sparsity audit (columns 99%+ empty), and duplicate-key checks.
 
 Usage (from the repo root), same inputs as build_clean:
-    python -m Scripts.profiling.profile_raw --raw-dir raw/2026-11-24 --out Docs/profiling_report.md
+    python -m Scripts.profiling.profile_raw --raw-root raw --out Docs/profiling_report.md
 """
 
 import argparse
@@ -14,7 +14,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from Scripts.common.build_clean import find_one, read_json
+from Scripts.common import lineage
+from Scripts.common.build_clean import read_json
 
 SPARSE_THRESHOLD = 99.0  # percent empty
 
@@ -66,17 +67,19 @@ def profile_source(name, df, key):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Profile raw sources into a Markdown report.")
-    parser.add_argument("--raw-dir")
+    parser.add_argument(
+        "--raw-root", help="The raw/ folder; the newest file of each source is used"
+    )
     parser.add_argument("--stations")
     parser.add_argument("--prices")
     parser.add_argument("--registrations")
     parser.add_argument("--out", default="Docs/profiling_report.md")
     args = parser.parse_args(argv)
-    if args.raw_dir:
-        args.stations = args.stations or find_one(f"{args.raw_dir}/afdc_stations", "stations.json*")
-        args.prices = args.prices or find_one(f"{args.raw_dir}/eia_prices", "retail_sales.*")
-        args.registrations = args.registrations or find_one(
-            f"{args.raw_dir}/afdc_registrations", "registrations.csv"
+    if args.raw_root:
+        args.stations = args.stations or lineage.latest_file(args.raw_root, "afdc_stations")[0]
+        args.prices = args.prices or lineage.latest_file(args.raw_root, "eia_prices")[0]
+        args.registrations = (
+            args.registrations or lineage.latest_file(args.raw_root, "afdc_registrations")[0]
         )
 
     raw = read_json(args.stations)
