@@ -9,3 +9,6 @@ Final-project AI policy is pending confirmation with the instructor/TA (open ite
 | 2026-11-24 | Norah (A) | Claude | Wrote ingestion modules, scheduled workflow, and tests | Reviewed code; ran in GitHub Actions; checked manifest row counts |
 
 | 2026-11-24 | Norah (A) | Claude | Wrote ingestion modules, scheduled workflow, and tests | Ran on GitHub Actions; checked manifest row counts || 2026-11-24 | Norah (A) | Claude | Wrote cleaning rules, key checks, profiling script, and tests | Ran in Colab on real data; checked counts and exclusion log |
+
+
+| 2026-11-25 | Norah (A) | Claude | Added loaded_run_id lineage, expected_date rule, and the EDA notebook | Ran in Colab on real data; checked charts and findings |
