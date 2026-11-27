@@ -40,12 +40,15 @@ def main(argv=None):
     results = []
     for name in args.sources:
         start = time.time()
+        started_at = datetime.now(UTC).isoformat()
         try:
             result = SOURCES[name](store, day)
             result["status"] = "success"
         except Exception as error:  # record the failure and continue with the next source
             log.error("%s FAILED: %s", name, error)
             result = {"source": name, "status": "failed", "error": str(error)}
+        result["started_at"] = started_at
+        result["finished_at"] = datetime.now(UTC).isoformat()
         result["seconds"] = round(time.time() - start, 1)
         results.append(result)
 
